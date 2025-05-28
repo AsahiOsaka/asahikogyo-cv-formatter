@@ -1,18 +1,13 @@
-# Professional Asahi CV Formatter - Clean & Simple Design
 import streamlit as st
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT
-from docx.oxml.shared import OxmlElement, qn
 from io import BytesIO
 import fitz  # PyMuPDF
 import re
 from PIL import Image
 from collections import defaultdict
-import time
 
-# --- Professional Clean CSS Design ---
 def apply_professional_css():
     st.markdown("""
     <style>
@@ -42,7 +37,6 @@ def apply_professional_css():
     </style>
     """, unsafe_allow_html=True)
 
-# --- Advanced PII Detection Class ---
 class PIIDetector:
     def __init__(self):
         self.patterns = {
@@ -132,7 +126,6 @@ class PIIDetector:
         cleaned_text = cleaned_text.strip()
         return cleaned_text, removal_count
 
-# --- Helper Functions ---
 def extract_text_from_pdf(file):
     text = ""
     try:
@@ -152,15 +145,11 @@ def extract_text_from_docx(file):
         st.error(f"Error reading DOCX: {str(e)}")
         return ""
 
-def abbreviate_name_age(full_name, age):
-    try:
-        name_parts = [part.strip() for part in full_name.strip().split() if part.strip()]
-        if not name_parts:
-            return f"N.A.{age}yrs"
-        initials = ''.join([part[0].upper() + '.' for part in name_parts])
-        return f"{initials} {age}yrs"
-    except Exception:
-        return f"N.A.{age}yrs"
+def abbreviate_name(full_name):
+    name_parts = [part for part in full_name.strip().split() if part]
+    if len(name_parts) == 0:
+        return "NA"
+    return ''.join([part[0].upper() for part in name_parts])
 
 def add_header_with_logo(doc, logo_img):
     section = doc.sections[0]
@@ -169,11 +158,9 @@ def add_header_with_logo(doc, logo_img):
         paragraph.clear()
     logo_para = header.add_paragraph()
     logo_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-    tab_stops = logo_para.paragraph_format.tab_stops
-    tab_stops.add_tab_stop(Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT)
-    logo_run = logo_para.add_run("\t")
+    logo_run = logo_para.add_run()
     image_stream = BytesIO()
-    logo_img.save(image_stream, format='PNG')
+    logo_img.save(image_stream, format='JPEG')
     image_stream.seek(0)
     logo_run.add_picture(image_stream, width=Inches(2.634), height=Inches(0.508))
     section.header_distance = Inches(0.4)
@@ -194,7 +181,7 @@ def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
     name_paragraph = doc.add_paragraph()
     name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     name_paragraph.paragraph_format.space_after = Pt(24)
-    name_run = name_paragraph.add_run(abbreviate_name_age(candidate_name, age))
+    name_run = name_paragraph.add_run(f"{abbreviate_name(candidate_name)} ({age})")
     name_run.font.name = 'ＭＳ 明朝'
     name_run.font.size = Pt(16)
     name_run.font.bold = True
@@ -205,7 +192,6 @@ def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
             doc.add_paragraph(line.strip())
     return doc
 
-# --- Main Application ---
 def main():
     st.set_page_config(
         page_title="Asahi CV Formatter",
@@ -213,8 +199,6 @@ def main():
         initial_sidebar_state="collapsed"
     )
     apply_professional_css()
-
-    # Clean professional header
     st.markdown("""
     <div class="main-header">
         <span class="emoji">📝</span>Professional CV formatting with automatic privacy protection
@@ -222,49 +206,39 @@ def main():
     """, unsafe_allow_html=True)
     st.write("Upload your CV for professional formatting and PII protection.")
 
-    # Age input
     age = st.number_input("Enter Candidate Age", min_value=18, max_value=99, value=25)
-
-    # File uploader
     uploaded_file = st.file_uploader("Upload a CV file (PDF or DOCX)", type=["pdf", "docx"])
 
     if uploaded_file:
-        if uploaded_file.type == "application/pdf":
+        # Load logo
+        logo_path = "asahi_logo-04.jpg"
+        try:
+            logo_img = Image.open(logo_path)
+        except FileNotFoundError:
+            st.error("⚠️ Logo file 'asahi_logo-04.jpg' not found. Please ensure it's in the same directory.")
+            st.stop()
+
+        if uploaded_file.name.lower().endswith(".pdf"):
             text = extract_text_from_pdf(uploaded_file)
-        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
+        elif uploaded_file.name.lower().endswith(".docx"):
             text = extract_text_from_docx(uploaded_file)
         else:
-            st.error("Unsupported file type.")
-            return
+            st.error("❌ Unsupported file type. Please upload a PDF or DOCX file.")
+            st.stop()
 
         if not text.strip():
-            st.error("Could not extract text from the file.")
+            st.error("❌ No text could be extracted from the file. Please check the file format.")
             return
 
         detector = PIIDetector()
         pii = detector.detect_all_pii(text)
-        cleaned_text, removal_count = detector.remove_pii(text, pii)
-
-        candidate_name = pii['names'][0] if pii.get('names') else "Candidate Name"
-
-        # Load logo image
-        try:
-            logo_img = Image.open("asahi_logo.png")
-        except FileNotFoundError:
-            st.error("asahi_logo.png not found.  Place in the same directory.")
-            return
-        except Exception as e:
-            st.error(f"Error loading logo: {e}")
-            return
-
+        cleaned_text, _ = detector.remove_pii(text, pii)
+        candidate_name = pii.get('names', ['Candidate'])[0] if pii.get('names') else "Candidate"
         doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
-
         output = BytesIO()
         doc.save(output)
         output.seek(0)
-
-        file_name = f"Asahi_CV_{abbreviate_name_age(candidate_name,age)}.docx"
-
+        file_name = f"Asahi_CV_{abbreviate_name(candidate_name)}.docx"
         st.download_button(
             label="Download Formatted CV",
             data=output,
