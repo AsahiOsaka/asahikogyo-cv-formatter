@@ -243,26 +243,36 @@ class PIIDetector:
         cleaned_text = text
         removal_count = 0
         
-        # Still detect and remove names internally, but don't show them in PII report
+        # AGGRESSIVE PII REMOVAL - Remove ALL personal information
         detected_names = self.detect_names(text)
+        
+        # Remove all detected names completely
         for name in detected_names:
-            if name and len(name.strip()) > 2:
-                pattern = re.compile(re.escape(name), re.IGNORECASE)
-                if pattern.search(cleaned_text):
-                    cleaned_text = pattern.sub('', cleaned_text)
-                    removal_count += 1
+            if name and len(name.strip()) > 1:
+                # Remove full name
+                cleaned_text = re.sub(re.escape(name), '', cleaned_text, flags=re.IGNORECASE)
+                # Remove individual parts of the name
+                name_parts = name.split()
+                for part in name_parts:
+                    if len(part) > 2:  # Don't remove very short words
+                        cleaned_text = re.sub(r'\b' + re.escape(part) + r'\b', '', cleaned_text, flags=re.IGNORECASE)
+                removal_count += 1
         
         # Process line by line to completely remove PII-containing lines
         lines = cleaned_text.split('\n')
         filtered_lines = []
         
         for line in lines:
-            line_contains_pii = False
             original_line = line.strip()
+            if not original_line:  # Skip empty lines
+                continue
+                
+            line_contains_pii = False
+            line_lower = original_line.lower()
             
             # Check if line matches any PII line patterns (complete removal)
             for pii_pattern in self.pii_line_patterns:
-                if pii_pattern.match(line):
+                if pii_pattern.match(original_line):
                     line_contains_pii = True
                     removal_count += 1
                     break
@@ -270,31 +280,942 @@ class PIIDetector:
             # Check for individual PII items in the line
             if not line_contains_pii:
                 for pii_type, items in detected_pii.items():
+                    if pii_type == 'personal_info_lines':
+                        continue  # Skip this, handled separately
                     for item in items:
                         if item and len(str(item).strip()) > 1:
-                            if str(item).lower() in line.lower():
+                            if str(item).lower() in line_lower:
                                 line_contains_pii = True
                                 removal_count += 1
                                 break
                     if line_contains_pii:
                         break
             
-            # Check for personal keywords that indicate the entire line should be removed
+            # Check for personal keywords - AGGRESSIVE REMOVAL
             if not line_contains_pii:
-                line_lower = line.lower()
-                for keyword in self.personal_keywords:
-                    if keyword in line_lower:
-                        # Additional check to avoid removing work-related lines
-                        if not any(work_keyword in line_lower for work_keyword in ['experience', 'work', 'employment', 'company', 'project', 'skill', 'education', 'university', 'college']):
+                personal_indicators = [
+                    'name:', 'full name', 'candidate name', 'applicant name',
+                    'address', 'home', 'residence', 'location',
+                    'phone', 'mobile', 'contact', 'tel', 'cell',
+                    'email', 'e-mail', '@', 'gmail', 'yahoo', 'hotmail',
+                    'date of birth', 'dob', 'born', 'age:', 'years old',
+                    'nationality', 'citizen', 'passport', 'visa',
+                    'marital', 'married', 'single', 'divorced',
+                    'height:', 'weight:', 'blood type',
+                    'emergency contact', 'next of kin',
+                    'linkedin', 'facebook', 'twitter', 'instagram',
+                    'personal details', 'personal information'
+                ]
+                
+                for indicator in personal_indicators:
+                    if indicator in line_lower:
+                        # Extra check to avoid removing professional content
+                        if not any(work_keyword in line_lower for work_keyword in [
+                            'experience', 'work experience', 'employment', 'company', 'project', 
+                            'skill', 'education', 'university', 'college', 'degree', 'certification',
+                            'achievement', 'responsibility', 'duties', 'managed', 'developed'
+                        ]):
                             line_contains_pii = True
                             removal_count += 1
                             break
             
-            # Only keep lines that don't contain PII
-            if not line_contains_pii and original_line:
-                filtered_lines.append(original_line)
+            # Check for lines that are likely personal headers or sections
+            if not line_contains_pii:
+                header_patterns = [
+                    r'^personal\s+(?:details|information|data)',
+                    r'^contact\s+(?:details|information|info)',
+                    r'^basic\s+(?:details|information|info)',
+                    r'^profile\s*
+
+# --- Helper Functions ---
+def extract_text_from_pdf(file):
+    text = ""
+    try:
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+    except Exception as e:
+        st.error(f"Error reading PDF: {str(e)}")
+        return ""
+    return text
+
+def extract_text_from_docx(file):
+    try:
+        doc = Document(file)
+        return "\n".join([para.text for para in doc.paragraphs])
+    except Exception as e:
+        st.error(f"Error reading DOCX: {str(e)}")
+        return ""
+
+def abbreviate_name_age(full_name, age):
+    try:
+        name_parts = [part.strip() for part in full_name.strip().split() if part.strip()]
+        if not name_parts:
+            return f"N.A.{age}yrs"
+        initials = ''.join([part[0].upper() + '.' for part in name_parts])
+        return f"{initials} {age}yrs"
+    except Exception:
+        return f"N.A.{age}yrs"
+
+def add_header_with_logo(doc, logo_img):
+    section = doc.sections[0]
+    header = section.header
+    
+    for paragraph in header.paragraphs:
+        paragraph.clear()
+    
+    logo_para = header.add_paragraph()
+    logo_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    tab_stops = logo_para.paragraph_format.tab_stops
+    tab_stops.add_tab_stop(Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT)
+    
+    logo_run = logo_para.add_run("\t")
+    
+    image_stream = BytesIO()
+    logo_img.save(image_stream, format='PNG')
+    image_stream.seek(0)
+    logo_run.add_picture(image_stream, width=Inches(2.634), height=Inches(0.508))
+    
+    section.header_distance = Inches(0.4)
+
+def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
+    doc = Document()
+    
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1.2)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+    
+    add_header_with_logo(doc, logo_img)
+    
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    
+    name_paragraph = doc.add_paragraph()
+    name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name_paragraph.paragraph_format.space_after = Pt(24)
+    
+    name_run = name_paragraph.add_run(abbreviate_name_age(candidate_name, age))
+    name_run.font.name = 'ＭＳ 明朝'
+    name_run.font.size = Pt(16)
+    name_run.font.bold = True
+    
+    doc.add_paragraph()
+    
+    content_lines = [line.strip() for line in cleaned_text.strip().split("\n") if line.strip()]
+    for line in content_lines:
+        if line.strip():
+            doc.add_paragraph(line.strip())
+    
+    return doc
+
+# --- Main Application ---
+def main():
+    st.set_page_config(
+        page_title="Asahi CV Formatter",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+    
+    apply_professional_css()
+    
+    # Clickable header that jumps to upload area - FIXED VERSION
+    if st.markdown("""
+    <div class="main-header" onclick="document.querySelector('[data-testid=\"stFileUploader\"]').scrollIntoView({behavior: 'smooth'});">
+        <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+    </div>
+    """, unsafe_allow_html=True):
+    
+    st.write("Professional CV formatting with automatic privacy protection")
+
+    # Supported formats section with improved design
+    st.markdown("""
+    <div class="supported-formats">
+        <h3>📄 Supported Formats</h3>
+        <ul class="format-list">
+            <li>PDF documents <span class="pdf-icon">📄</span></li>
+            <li>DOCX documents <span class="docx-icon">📄</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    pii_detector = PIIDetector()
+    
+    # Upload section - Clean version without extra spacing
+    uploaded_file = st.file_uploader(
+        "📄 Choose CV file (PDF or DOCX)", 
+        type=["docx", "pdf"],
+        help="Upload the candidate's resume in PDF or Word format"
+    )
+    
+    # Candidate information inputs
+    st.markdown("### 👤 Candidate Information")
+    col1, col2 = st.columns(2)
+    with col1:
+        candidate_name = st.text_input("👤 Candidate Full Name", placeholder="e.g., John Doe Smith")
+    with col2:
+        age = st.number_input("🎂 Candidate Age", min_value=18, max_value=99, step=1)
+    
+    # Processing section - Auto-process when file, name and age are provided
+    if uploaded_file and candidate_name.strip() and age:
+        # Load logo
+        try:
+            logo_img = Image.open("asahi_logo-04.jpg")
+        except FileNotFoundError:
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Warning:</strong> Logo file 'asahi_logo-04.jpg' not found. Please ensure it's in the same directory.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Extract text
+        if uploaded_file.name.lower().endswith(".pdf"):
+            raw_text = extract_text_from_pdf(uploaded_file)
+        else:
+            raw_text = extract_text_from_docx(uploaded_file)
+        
+        if not raw_text.strip():
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Error:</strong> No text could be extracted from the file. Please check the file format.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Show file loaded successfully in plain text
+        st.markdown(f"""
+        <div class="status-success">
+            File loaded successfully: {uploaded_file.name} ({len(raw_text.split())} words)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Auto-process without button
+        with st.spinner("Processing CV..."):
+            # Use the manually entered candidate name
+            
+            # Detect and remove ALL PII including names
+            detected_pii = pii_detector.detect_all_pii(raw_text)
+            cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
+            
+            # Generate document with only abbreviation in header
+            final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
+            buffer = BytesIO()
+            final_doc.save(buffer)
+            buffer.seek(0)
+            
+            # Show simple completion message
+            st.markdown("""
+            <div class="status-success">
+                CV Processing Complete!
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Download with abbreviation filename
+            abbreviation = abbreviate_name_age(candidate_name, age).replace(f" {age}yrs", "")
+            file_name = f"Asahi_CV_{abbreviation}.docx"
+            st.download_button(
+                label="Download Formatted CV",
+                data=buffer,
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    
+    elif uploaded_file or candidate_name.strip() or age:
+        st.markdown("""
+        <div class="status-info">
+            <strong>Ready to process:</strong> Please provide all required information above to continue.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Footer
+    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main(),
+                    r'^personal\s*
+
+# --- Helper Functions ---
+def extract_text_from_pdf(file):
+    text = ""
+    try:
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+    except Exception as e:
+        st.error(f"Error reading PDF: {str(e)}")
+        return ""
+    return text
+
+def extract_text_from_docx(file):
+    try:
+        doc = Document(file)
+        return "\n".join([para.text for para in doc.paragraphs])
+    except Exception as e:
+        st.error(f"Error reading DOCX: {str(e)}")
+        return ""
+
+def abbreviate_name_age(full_name, age):
+    try:
+        name_parts = [part.strip() for part in full_name.strip().split() if part.strip()]
+        if not name_parts:
+            return f"N.A.{age}yrs"
+        initials = ''.join([part[0].upper() + '.' for part in name_parts])
+        return f"{initials} {age}yrs"
+    except Exception:
+        return f"N.A.{age}yrs"
+
+def add_header_with_logo(doc, logo_img):
+    section = doc.sections[0]
+    header = section.header
+    
+    for paragraph in header.paragraphs:
+        paragraph.clear()
+    
+    logo_para = header.add_paragraph()
+    logo_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    tab_stops = logo_para.paragraph_format.tab_stops
+    tab_stops.add_tab_stop(Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT)
+    
+    logo_run = logo_para.add_run("\t")
+    
+    image_stream = BytesIO()
+    logo_img.save(image_stream, format='PNG')
+    image_stream.seek(0)
+    logo_run.add_picture(image_stream, width=Inches(2.634), height=Inches(0.508))
+    
+    section.header_distance = Inches(0.4)
+
+def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
+    doc = Document()
+    
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1.2)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+    
+    add_header_with_logo(doc, logo_img)
+    
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    
+    name_paragraph = doc.add_paragraph()
+    name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name_paragraph.paragraph_format.space_after = Pt(24)
+    
+    name_run = name_paragraph.add_run(abbreviate_name_age(candidate_name, age))
+    name_run.font.name = 'ＭＳ 明朝'
+    name_run.font.size = Pt(16)
+    name_run.font.bold = True
+    
+    doc.add_paragraph()
+    
+    content_lines = [line.strip() for line in cleaned_text.strip().split("\n") if line.strip()]
+    for line in content_lines:
+        if line.strip():
+            doc.add_paragraph(line.strip())
+    
+    return doc
+
+# --- Main Application ---
+def main():
+    st.set_page_config(
+        page_title="Asahi CV Formatter",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+    
+    apply_professional_css()
+    
+    # Clickable header that jumps to upload area - FIXED VERSION
+    if st.markdown("""
+    <div class="main-header" onclick="document.querySelector('[data-testid=\"stFileUploader\"]').scrollIntoView({behavior: 'smooth'});">
+        <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+    </div>
+    """, unsafe_allow_html=True):
+    
+    st.write("Professional CV formatting with automatic privacy protection")
+
+    # Supported formats section with improved design
+    st.markdown("""
+    <div class="supported-formats">
+        <h3>📄 Supported Formats</h3>
+        <ul class="format-list">
+            <li>PDF documents <span class="pdf-icon">📄</span></li>
+            <li>DOCX documents <span class="docx-icon">📄</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    pii_detector = PIIDetector()
+    
+    # Upload section - Clean version without extra spacing
+    uploaded_file = st.file_uploader(
+        "📄 Choose CV file (PDF or DOCX)", 
+        type=["docx", "pdf"],
+        help="Upload the candidate's resume in PDF or Word format"
+    )
+    
+    # Candidate information inputs
+    st.markdown("### 👤 Candidate Information")
+    col1, col2 = st.columns(2)
+    with col1:
+        candidate_name = st.text_input("👤 Candidate Full Name", placeholder="e.g., John Doe Smith")
+    with col2:
+        age = st.number_input("🎂 Candidate Age", min_value=18, max_value=99, step=1)
+    
+    # Processing section - Auto-process when file, name and age are provided
+    if uploaded_file and candidate_name.strip() and age:
+        # Load logo
+        try:
+            logo_img = Image.open("asahi_logo-04.jpg")
+        except FileNotFoundError:
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Warning:</strong> Logo file 'asahi_logo-04.jpg' not found. Please ensure it's in the same directory.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Extract text
+        if uploaded_file.name.lower().endswith(".pdf"):
+            raw_text = extract_text_from_pdf(uploaded_file)
+        else:
+            raw_text = extract_text_from_docx(uploaded_file)
+        
+        if not raw_text.strip():
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Error:</strong> No text could be extracted from the file. Please check the file format.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Show file loaded successfully in plain text
+        st.markdown(f"""
+        <div class="status-success">
+            File loaded successfully: {uploaded_file.name} ({len(raw_text.split())} words)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Auto-process without button
+        with st.spinner("Processing CV..."):
+            # Use the manually entered candidate name
+            
+            # Detect and remove ALL PII including names
+            detected_pii = pii_detector.detect_all_pii(raw_text)
+            cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
+            
+            # Generate document with only abbreviation in header
+            final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
+            buffer = BytesIO()
+            final_doc.save(buffer)
+            buffer.seek(0)
+            
+            # Show simple completion message
+            st.markdown("""
+            <div class="status-success">
+                CV Processing Complete!
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Download with abbreviation filename
+            abbreviation = abbreviate_name_age(candidate_name, age).replace(f" {age}yrs", "")
+            file_name = f"Asahi_CV_{abbreviation}.docx"
+            st.download_button(
+                label="Download Formatted CV",
+                data=buffer,
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    
+    elif uploaded_file or candidate_name.strip() or age:
+        st.markdown("""
+        <div class="status-info">
+            <strong>Ready to process:</strong> Please provide all required information above to continue.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Footer
+    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main(),
+                    r'^about\s+me\s*
+
+# --- Helper Functions ---
+def extract_text_from_pdf(file):
+    text = ""
+    try:
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+    except Exception as e:
+        st.error(f"Error reading PDF: {str(e)}")
+        return ""
+    return text
+
+def extract_text_from_docx(file):
+    try:
+        doc = Document(file)
+        return "\n".join([para.text for para in doc.paragraphs])
+    except Exception as e:
+        st.error(f"Error reading DOCX: {str(e)}")
+        return ""
+
+def abbreviate_name_age(full_name, age):
+    try:
+        name_parts = [part.strip() for part in full_name.strip().split() if part.strip()]
+        if not name_parts:
+            return f"N.A.{age}yrs"
+        initials = ''.join([part[0].upper() + '.' for part in name_parts])
+        return f"{initials} {age}yrs"
+    except Exception:
+        return f"N.A.{age}yrs"
+
+def add_header_with_logo(doc, logo_img):
+    section = doc.sections[0]
+    header = section.header
+    
+    for paragraph in header.paragraphs:
+        paragraph.clear()
+    
+    logo_para = header.add_paragraph()
+    logo_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    tab_stops = logo_para.paragraph_format.tab_stops
+    tab_stops.add_tab_stop(Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT)
+    
+    logo_run = logo_para.add_run("\t")
+    
+    image_stream = BytesIO()
+    logo_img.save(image_stream, format='PNG')
+    image_stream.seek(0)
+    logo_run.add_picture(image_stream, width=Inches(2.634), height=Inches(0.508))
+    
+    section.header_distance = Inches(0.4)
+
+def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
+    doc = Document()
+    
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1.2)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+    
+    add_header_with_logo(doc, logo_img)
+    
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    
+    name_paragraph = doc.add_paragraph()
+    name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name_paragraph.paragraph_format.space_after = Pt(24)
+    
+    name_run = name_paragraph.add_run(abbreviate_name_age(candidate_name, age))
+    name_run.font.name = 'ＭＳ 明朝'
+    name_run.font.size = Pt(16)
+    name_run.font.bold = True
+    
+    doc.add_paragraph()
+    
+    content_lines = [line.strip() for line in cleaned_text.strip().split("\n") if line.strip()]
+    for line in content_lines:
+        if line.strip():
+            doc.add_paragraph(line.strip())
+    
+    return doc
+
+# --- Main Application ---
+def main():
+    st.set_page_config(
+        page_title="Asahi CV Formatter",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+    
+    apply_professional_css()
+    
+    # Clickable header that jumps to upload area - FIXED VERSION
+    if st.markdown("""
+    <div class="main-header" onclick="document.querySelector('[data-testid=\"stFileUploader\"]').scrollIntoView({behavior: 'smooth'});">
+        <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+    </div>
+    """, unsafe_allow_html=True):
+    
+    st.write("Professional CV formatting with automatic privacy protection")
+
+    # Supported formats section with improved design
+    st.markdown("""
+    <div class="supported-formats">
+        <h3>📄 Supported Formats</h3>
+        <ul class="format-list">
+            <li>PDF documents <span class="pdf-icon">📄</span></li>
+            <li>DOCX documents <span class="docx-icon">📄</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    pii_detector = PIIDetector()
+    
+    # Upload section - Clean version without extra spacing
+    uploaded_file = st.file_uploader(
+        "📄 Choose CV file (PDF or DOCX)", 
+        type=["docx", "pdf"],
+        help="Upload the candidate's resume in PDF or Word format"
+    )
+    
+    # Candidate information inputs
+    st.markdown("### 👤 Candidate Information")
+    col1, col2 = st.columns(2)
+    with col1:
+        candidate_name = st.text_input("👤 Candidate Full Name", placeholder="e.g., John Doe Smith")
+    with col2:
+        age = st.number_input("🎂 Candidate Age", min_value=18, max_value=99, step=1)
+    
+    # Processing section - Auto-process when file, name and age are provided
+    if uploaded_file and candidate_name.strip() and age:
+        # Load logo
+        try:
+            logo_img = Image.open("asahi_logo-04.jpg")
+        except FileNotFoundError:
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Warning:</strong> Logo file 'asahi_logo-04.jpg' not found. Please ensure it's in the same directory.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Extract text
+        if uploaded_file.name.lower().endswith(".pdf"):
+            raw_text = extract_text_from_pdf(uploaded_file)
+        else:
+            raw_text = extract_text_from_docx(uploaded_file)
+        
+        if not raw_text.strip():
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Error:</strong> No text could be extracted from the file. Please check the file format.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Show file loaded successfully in plain text
+        st.markdown(f"""
+        <div class="status-success">
+            File loaded successfully: {uploaded_file.name} ({len(raw_text.split())} words)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Auto-process without button
+        with st.spinner("Processing CV..."):
+            # Use the manually entered candidate name
+            
+            # Detect and remove ALL PII including names
+            detected_pii = pii_detector.detect_all_pii(raw_text)
+            cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
+            
+            # Generate document with only abbreviation in header
+            final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
+            buffer = BytesIO()
+            final_doc.save(buffer)
+            buffer.seek(0)
+            
+            # Show simple completion message
+            st.markdown("""
+            <div class="status-success">
+                CV Processing Complete!
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Download with abbreviation filename
+            abbreviation = abbreviate_name_age(candidate_name, age).replace(f" {age}yrs", "")
+            file_name = f"Asahi_CV_{abbreviation}.docx"
+            st.download_button(
+                label="Download Formatted CV",
+                data=buffer,
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    
+    elif uploaded_file or candidate_name.strip() or age:
+        st.markdown("""
+        <div class="status-info">
+            <strong>Ready to process:</strong> Please provide all required information above to continue.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Footer
+    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main(),
+                    r'^\w+\s+\w+\s*
+
+# --- Helper Functions ---
+def extract_text_from_pdf(file):
+    text = ""
+    try:
+        with fitz.open(stream=file.read(), filetype="pdf") as doc:
+            for page in doc:
+                text += page.get_text()
+    except Exception as e:
+        st.error(f"Error reading PDF: {str(e)}")
+        return ""
+    return text
+
+def extract_text_from_docx(file):
+    try:
+        doc = Document(file)
+        return "\n".join([para.text for para in doc.paragraphs])
+    except Exception as e:
+        st.error(f"Error reading DOCX: {str(e)}")
+        return ""
+
+def abbreviate_name_age(full_name, age):
+    try:
+        name_parts = [part.strip() for part in full_name.strip().split() if part.strip()]
+        if not name_parts:
+            return f"N.A.{age}yrs"
+        initials = ''.join([part[0].upper() + '.' for part in name_parts])
+        return f"{initials} {age}yrs"
+    except Exception:
+        return f"N.A.{age}yrs"
+
+def add_header_with_logo(doc, logo_img):
+    section = doc.sections[0]
+    header = section.header
+    
+    for paragraph in header.paragraphs:
+        paragraph.clear()
+    
+    logo_para = header.add_paragraph()
+    logo_para.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+    
+    tab_stops = logo_para.paragraph_format.tab_stops
+    tab_stops.add_tab_stop(Inches(6.5), WD_ALIGN_PARAGRAPH.RIGHT)
+    
+    logo_run = logo_para.add_run("\t")
+    
+    image_stream = BytesIO()
+    logo_img.save(image_stream, format='PNG')
+    image_stream.seek(0)
+    logo_run.add_picture(image_stream, width=Inches(2.634), height=Inches(0.508))
+    
+    section.header_distance = Inches(0.4)
+
+def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
+    doc = Document()
+    
+    sections = doc.sections
+    for section in sections:
+        section.top_margin = Inches(1.2)
+        section.bottom_margin = Inches(0.8)
+        section.left_margin = Inches(0.8)
+        section.right_margin = Inches(0.8)
+    
+    add_header_with_logo(doc, logo_img)
+    
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    
+    name_paragraph = doc.add_paragraph()
+    name_paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    name_paragraph.paragraph_format.space_after = Pt(24)
+    
+    name_run = name_paragraph.add_run(abbreviate_name_age(candidate_name, age))
+    name_run.font.name = 'ＭＳ 明朝'
+    name_run.font.size = Pt(16)
+    name_run.font.bold = True
+    
+    doc.add_paragraph()
+    
+    content_lines = [line.strip() for line in cleaned_text.strip().split("\n") if line.strip()]
+    for line in content_lines:
+        if line.strip():
+            doc.add_paragraph(line.strip())
+    
+    return doc
+
+# --- Main Application ---
+def main():
+    st.set_page_config(
+        page_title="Asahi CV Formatter",
+        layout="centered",
+        initial_sidebar_state="collapsed"
+    )
+    
+    apply_professional_css()
+    
+    # Clickable header that jumps to upload area - FIXED VERSION
+    if st.markdown("""
+    <div class="main-header" onclick="document.querySelector('[data-testid=\"stFileUploader\"]').scrollIntoView({behavior: 'smooth'});">
+        <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+    </div>
+    """, unsafe_allow_html=True):
+    
+    st.write("Professional CV formatting with automatic privacy protection")
+
+    # Supported formats section with improved design
+    st.markdown("""
+    <div class="supported-formats">
+        <h3>📄 Supported Formats</h3>
+        <ul class="format-list">
+            <li>PDF documents <span class="pdf-icon">📄</span></li>
+            <li>DOCX documents <span class="docx-icon">📄</span></li>
+        </ul>
+    </div>
+    """, unsafe_allow_html=True)
+    
+    pii_detector = PIIDetector()
+    
+    # Upload section - Clean version without extra spacing
+    uploaded_file = st.file_uploader(
+        "📄 Choose CV file (PDF or DOCX)", 
+        type=["docx", "pdf"],
+        help="Upload the candidate's resume in PDF or Word format"
+    )
+    
+    # Candidate information inputs
+    st.markdown("### 👤 Candidate Information")
+    col1, col2 = st.columns(2)
+    with col1:
+        candidate_name = st.text_input("👤 Candidate Full Name", placeholder="e.g., John Doe Smith")
+    with col2:
+        age = st.number_input("🎂 Candidate Age", min_value=18, max_value=99, step=1)
+    
+    # Processing section - Auto-process when file, name and age are provided
+    if uploaded_file and candidate_name.strip() and age:
+        # Load logo
+        try:
+            logo_img = Image.open("asahi_logo-04.jpg")
+        except FileNotFoundError:
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Warning:</strong> Logo file 'asahi_logo-04.jpg' not found. Please ensure it's in the same directory.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Extract text
+        if uploaded_file.name.lower().endswith(".pdf"):
+            raw_text = extract_text_from_pdf(uploaded_file)
+        else:
+            raw_text = extract_text_from_docx(uploaded_file)
+        
+        if not raw_text.strip():
+            st.markdown("""
+            <div class="status-warning">
+                <strong>Error:</strong> No text could be extracted from the file. Please check the file format.
+            </div>
+            """, unsafe_allow_html=True)
+            st.stop()
+        
+        # Show file loaded successfully in plain text
+        st.markdown(f"""
+        <div class="status-success">
+            File loaded successfully: {uploaded_file.name} ({len(raw_text.split())} words)
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Auto-process without button
+        with st.spinner("Processing CV..."):
+            # Use the manually entered candidate name
+            
+            # Detect and remove ALL PII including names
+            detected_pii = pii_detector.detect_all_pii(raw_text)
+            cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
+            
+            # Generate document with only abbreviation in header
+            final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
+            buffer = BytesIO()
+            final_doc.save(buffer)
+            buffer.seek(0)
+            
+            # Show simple completion message
+            st.markdown("""
+            <div class="status-success">
+                CV Processing Complete!
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Download with abbreviation filename
+            abbreviation = abbreviate_name_age(candidate_name, age).replace(f" {age}yrs", "")
+            file_name = f"Asahi_CV_{abbreviation}.docx"
+            st.download_button(
+                label="Download Formatted CV",
+                data=buffer,
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
+    
+    elif uploaded_file or candidate_name.strip() or age:
+        st.markdown("""
+        <div class="status-info">
+            <strong>Ready to process:</strong> Please provide all required information above to continue.
+        </div>
+        """, unsafe_allow_html=True)
+
+    # Footer
+    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
+
+if __name__ == "__main__":
+    main()  # Likely name pattern (two words only)
+                ]
+                
+                for pattern in header_patterns:
+                    if re.match(pattern, line_lower):
+                        line_contains_pii = True
+                        removal_count += 1
+                        break
+            
+            # Only keep lines that don't contain ANY personal information
+            if not line_contains_pii:
+                # Additional cleaning - remove any remaining email patterns
+                cleaned_line = re.sub(r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '', original_line)
+                # Remove phone number patterns
+                cleaned_line = re.sub(r'[\+\(]?\d{1,4}[\s\-\(\)]*\d{3,4}[\s\-]*\d{3,4}', '', cleaned_line)
+                # Remove address-like patterns
+                cleaned_line = re.sub(r'\d+\s+[\w\s,.-]+(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln)', '', cleaned_line, flags=re.IGNORECASE)
+                
+                cleaned_line = cleaned_line.strip()
+                if cleaned_line and len(cleaned_line) > 3:  # Only keep meaningful lines
+                    filtered_lines.append(cleaned_line)
         
         cleaned_text = '\n'.join(filtered_lines)
+        
+        # Final cleanup - remove any remaining personal patterns
+        # Remove any lines that are just a single word (likely names)
+        lines = cleaned_text.split('\n')
+        final_lines = []
+        for line in lines:
+            line = line.strip()
+            if line:
+                words = line.split()
+                # Skip lines with only 1-2 words that might be names or personal info
+                if len(words) >= 3 or any(keyword in line.lower() for keyword in [
+                    'experience', 'education', 'skill', 'project', 'work', 'employment',
+                    'university', 'college', 'degree', 'certification', 'achievement'
+                ]):
+                    final_lines.append(line)
+        
+        cleaned_text = '\n'.join(final_lines)
         
         # Clean up extra whitespace and empty lines
         cleaned_text = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned_text)
@@ -400,11 +1321,11 @@ def main():
     apply_professional_css()
     
     # Clickable header that jumps to upload area - FIXED VERSION
-    st.markdown("""
-    <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
+    if st.markdown("""
+    <div class="main-header" onclick="document.querySelector('[data-testid=\"stFileUploader\"]').scrollIntoView({behavior: 'smooth'});">
         <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
     </div>
-    """, unsafe_allow_html=True)
+    """, unsafe_allow_html=True):
     
     st.write("Professional CV formatting with automatic privacy protection")
 
@@ -421,8 +1342,7 @@ def main():
     
     pii_detector = PIIDetector()
     
-    # Upload section with anchor - Clean version without extra spacing
-    st.markdown('<div id="upload-section"></div>', unsafe_allow_html=True)
+    # Upload section - Clean version without extra spacing
     uploaded_file = st.file_uploader(
         "📄 Choose CV file (PDF or DOCX)", 
         type=["docx", "pdf"],
@@ -510,7 +1430,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # Footer
-    st.markdown('<div class="footer">©Asahi Kogyo Co., Ltd. Osaka Office</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
