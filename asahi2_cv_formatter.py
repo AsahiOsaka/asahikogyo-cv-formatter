@@ -12,50 +12,6 @@ from PIL import Image
 from collections import defaultdict
 import time
 
-
-
-# --- Main Application ---
-def main():
-    st.set_page_config(
-        page_title="Asahi CV Formatter",
-        layout="centered",
-        initial_sidebar_state="collapsed"
-    )
-    apply_professional_css()
-
-    # Clean professional header
-    st.markdown("""
-    <div class="main-header">
-        <span class="emoji">📝</span>Asahi CV Formatter
-    </div>
-    """, unsafe_allow_html=True)
-    st.write("Transform your CVs into Asahi format.")
-
-    # Age input
-    age = st.number_input("Enter Candidate Age", min_value=18, max_value=99, value=25)
-
-    # File uploader
-    uploaded_file = st.file_uploader("Upload a CV file (PDF or DOCX)", type=["pdf", "docx"])
-
-    if uploaded_file:
-        if uploaded_file.type == "application/pdf":
-            text = extract_text_from_pdf(uploaded_file)
-        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            text = extract_text_from_docx(uploaded_file)
-        else:
-            st.error("Unsupported file type.")
-            return
-
-        if not text.strip():
-            st.error("Could not extract text from the file.")
-            return
-
-        detector = PIIDetector()
-        pii = detector.detect_all_pii(text)
-        cleaned_text, removal_count = detector.remove_pii(text, pii)
-
-        candidate_name = pii['names'][0] if pii.get('names') else "Candidate Name"
-
 # --- Supported Formats Area ---
 col1, col2 = st.columns([1, 2])
 with col2:
@@ -268,6 +224,107 @@ def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
     
     return doc
 
+def apply_professional_css():
+    st.markdown("""
+    <style>
+        .main-header {
+            font-size: 2rem;
+            font-weight: 600;
+            color: #2c3e50;
+            margin-bottom: 1.5rem;
+            text-align: center;
+        }
+        .main-header .emoji {
+            font-size: 2.2rem;
+            margin-right: 0.5rem;
+        }
+        .clean-card {
+            background-color: white;
+            border-radius: 10px;
+            padding: 1.5rem;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            margin-bottom: 1.5rem;
+        }
+        .upload-area {
+            border: 2px dashed #e2e8f0;
+            border-radius: 8px;
+            padding: 2rem;
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .status-info {
+            background-color: #f0f9ff;
+            color: #0369a1;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #0369a1;
+        }
+        .status-success {
+            background-color: #f0fdf4;
+            color: #15803d;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #15803d;
+        }
+        .status-warning {
+            background-color: #fef2f2;
+            color: #b91c1c;
+            padding: 1rem;
+            border-radius: 8px;
+            margin: 1rem 0;
+            border-left: 4px solid #b91c1c;
+        }
+        .progress-step {
+            margin: 0.5rem 0;
+            padding: 0.75rem 1rem;
+            background-color: #f8fafc;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+        }
+        .step-check {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 24px;
+            height: 24px;
+            background-color: #10b981;
+            color: white;
+            border-radius: 50%;
+            margin-right: 0.75rem;
+            font-size: 0.875rem;
+        }
+        .metric-item {
+            text-align: center;
+            padding: 0.75rem;
+            background-color: #f8fafc;
+            border-radius: 8px;
+        }
+        .metric-number {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1e293b;
+        }
+        .metric-label {
+            font-size: 0.875rem;
+            color: #64748b;
+        }
+        .detection-summary {
+            background-color: #fffbeb;
+            padding: 1rem;
+            border-radius: 8px;
+        }
+        .detection-item {
+            margin: 0.5rem 0;
+            padding: 0.5rem;
+            background-color: #fef3c7;
+            border-radius: 4px;
+        }
+    </style>
+    """, unsafe_allow_html=True)
+
 # --- Main Application ---
 def main():
     st.set_page_config(
@@ -452,8 +509,6 @@ def main():
             <strong>Ready to process:</strong> Please provide all required information above to continue.
         </div>
         """, unsafe_allow_html=True)
-  )
 
-    st.markdown('<div class="footer">©Asahi Kogyo Co., Ltd. Osaka Office</div>', unsafe_allow_html=True)
 if __name__ == "__main__":
     main()
