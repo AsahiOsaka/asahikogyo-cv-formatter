@@ -198,7 +198,7 @@ class PIIDetector:
             'date_of_birth': re.compile(r'\b(?:DOB|Date of Birth|Born):?\s*(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})', re.IGNORECASE),
             'ssn': re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),
             'linkedin': re.compile(r'linkedin\.com/in/[\w-]+', re.IGNORECASE),
-	    'name';re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$'),
+	    'name': re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$'),
 
         }
         
