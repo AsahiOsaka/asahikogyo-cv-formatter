@@ -13,34 +13,6 @@ from collections import defaultdict
 import time
 
 
-# ---Perplexity Last Add5/28 Clickable Header ---
-st.markdown("""
-    <h2 style='cursor:pointer; color:#0072C6; margin-bottom:0.5em;'>
-        <a href='#upload-area' style='text-decoration:none; color:inherit;'>
-            Upload your file <span style='font-size:0.7em;'>&#8595;</span>
-        </a>
-    </h2>
-""", unsafe_allow_html=True)
-
-# --- Supported Formats Area ---
-col1, col2 = st.columns([1, 2])
-with col2:
-    st.markdown("""
-        <div style='background-color: #f0f4f8; padding: 1em; border-radius: 8px; margin-bottom: 1em;'>
-            <b>Supported formats:</b>
-            <ul style='margin:0; padding-left:1.2em;'>
-                <li>PDF documents <span style='color:#e25555;'>&#128196;</span></li>
-                <li>DOCX documents <span style='color:#4a90e2;'>&#128196;</span></li>
-            </ul>
-        </div>
-    """, unsafe_allow_html=True)
-
-# --- Upload Area with Anchor ---
-st.markdown("<div id='upload-area'></div>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'docx'])
-
-if uploaded_file:
-    st.success(f"Uploaded: {uploaded_file.name}")
 
 # --- Main Application ---
 def main():
@@ -83,6 +55,26 @@ def main():
         cleaned_text, removal_count = detector.remove_pii(text, pii)
 
         candidate_name = pii['names'][0] if pii.get('names') else "Candidate Name"
+
+# --- Supported Formats Area ---
+col1, col2 = st.columns([1, 2])
+with col2:
+    st.markdown("""
+        <div style='background-color: #f0f4f8; padding: 1em; border-radius: 8px; margin-bottom: 1em;'>
+            <b>Supported formats:</b>
+            <ul style='margin:0; padding-left:1.2em;'>
+                <li>PDF documents <span style='color:#e25555;'>&#128196;</span></li>
+                <li>DOCX documents <span style='color:#4a90e2;'>&#128196;</span></li>
+            </ul>
+        </div>
+    """, unsafe_allow_html=True)
+
+# --- Upload Area with Anchor ---
+st.markdown("<div id='upload-area'></div>", unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'docx'])
+
+if uploaded_file:
+    st.success(f"Uploaded: {uploaded_file.name}")
 
 # --- Advanced PII Detection Class ---
 class PIIDetector:
@@ -460,6 +452,8 @@ def main():
             <strong>Ready to process:</strong> Please provide all required information above to continue.
         </div>
         """, unsafe_allow_html=True)
+  )
 
+    st.markdown('<div class="footer">©Asahi Kogyo Co., Ltd. Osaka Office</div>', unsafe_allow_html=True)
 if __name__ == "__main__":
     main()
