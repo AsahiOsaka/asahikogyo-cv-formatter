@@ -12,69 +12,163 @@ from PIL import Image
 from collections import defaultdict
 import time
 
-
-
-# --- Main Application ---
-def main():
-    st.set_page_config(
-        page_title="Asahi CV Formatter",
-        layout="centered",
-        initial_sidebar_state="collapsed"
-    )
-    apply_professional_css()
-
-    # Clean professional header
+# --- Professional Clean CSS Design ---
+def apply_professional_css():
     st.markdown("""
-    <div class="main-header">
-        <span class="emoji">📝</span>Asahi CV Formatter
-    </div>
+    <style>
+    .main-header {
+        background: linear-gradient(90deg, #0f2027 0%, #2c5364 100%);
+        color: #fff;
+        padding: 1.5rem 1rem 1rem 1rem;
+        border-radius: 16px;
+        margin-bottom: 2rem;
+        text-align: center;
+        font-size: 2.1rem;
+        font-weight: 700;
+        letter-spacing: 1px;
+        box-shadow: 0 2px 8px rgba(44,83,100,0.12);
+    }
+    .emoji {
+        font-size: 2.2rem;
+        vertical-align: middle;
+        margin-right: 0.5rem;
+    }
+    .supported-formats {
+        background: linear-gradient(135deg, #f0f4f8 0%, #e8f2ff 100%);
+        padding: 1.5rem;
+        border-radius: 12px;
+        margin-bottom: 2rem;
+        border-left: 4px solid #2c5364;
+        box-shadow: 0 2px 10px rgba(44,83,100,0.08);
+    }
+    .supported-formats h3 {
+        color: #2c5364;
+        margin-bottom: 1rem;
+        font-weight: 600;
+        font-size: 1.1rem;
+    }
+    .format-list {
+        margin: 0;
+        padding-left: 1.2rem;
+        color: #4a5568;
+    }
+    .format-list li {
+        margin-bottom: 0.5rem;
+        font-weight: 500;
+    }
+    .pdf-icon {
+        color: #e25555;
+        font-size: 1.1rem;
+        margin-left: 0.5rem;
+    }
+    .docx-icon {
+        color: #4a90e2;
+        font-size: 1.1rem;
+        margin-left: 0.5rem;
+    }
+    .clean-card {
+        background: #ffffff;
+        padding: 1.5rem;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.04);
+        border: 1px solid #e2e8f0;
+        margin-bottom: 1.5rem;
+    }
+    .clean-card h3 {
+        color: #374151;
+        font-weight: 600;
+        margin-bottom: 1.5rem;
+        font-size: 1.2rem;
+        border-bottom: 2px solid #f1f5f9;
+        padding-bottom: 0.5rem;
+    }
+    .upload-area {
+        border: 2px dashed #cbd5e0;
+        border-radius: 12px;
+        padding: 2rem;
+        text-align: center;
+        background: #f7fafc;
+        transition: all 0.3s ease;
+    }
+    .upload-area:hover {
+        border-color: #2c5364;
+        background: #edf2f7;
+    }
+    .status-success {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+        font-weight: 500;
+        box-shadow: 0 2px 8px rgba(72,187,120,0.2);
+    }
+    .status-info {
+        background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+        font-weight: 500;
+        box-shadow: 0 2px 8px rgba(66,153,225,0.2);
+    }
+    .status-warning {
+        background: linear-gradient(135deg, #ed8936 0%, #dd6b20 100%);
+        color: white;
+        padding: 1rem 1.5rem;
+        border-radius: 10px;
+        margin: 1rem 0;
+        font-weight: 500;
+        box-shadow: 0 2px 8px rgba(237,137,54,0.2);
+    }
+    .progress-step {
+        margin: 0.5rem 0;
+        color: #4a5568;
+        font-weight: 500;
+    }
+    .step-check {
+        color: #48bb78;
+        margin-right: 0.5rem;
+        font-weight: bold;
+    }
+    .metric-item {
+        text-align: center;
+        background: #f7fafc;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #e2e8f0;
+    }
+    .metric-number {
+        font-size: 1.8rem;
+        font-weight: bold;
+        color: #2c5364;
+    }
+    .metric-label {
+        color: #718096;
+        font-size: 0.9rem;
+        margin-top: 0.2rem;
+    }
+    .detection-summary {
+        background: #fffbeb;
+        padding: 1rem;
+        border-radius: 8px;
+        border: 1px solid #f59e0b;
+    }
+    .detection-item {
+        margin: 0.5rem 0;
+        color: #92400e;
+        font-size: 0.9rem;
+    }
+    .footer {
+        margin-top: 3rem;
+        padding-top: 2rem;
+        border-top: 1px solid #e2e8f0;
+        color: #718096;
+        font-size: 0.9rem;
+        text-align: center;
+    }
+    </style>
     """, unsafe_allow_html=True)
-    st.write("Transform your CVs into Asahi format.")
-
-    # Age input
-    age = st.number_input("Enter Candidate Age", min_value=18, max_value=99, value=25)
-
-    # File uploader
-    uploaded_file = st.file_uploader("Upload a CV file (PDF or DOCX)", type=["pdf", "docx"])
-
-    if uploaded_file:
-        if uploaded_file.type == "application/pdf":
-            text = extract_text_from_pdf(uploaded_file)
-        elif uploaded_file.type == "application/vnd.openxmlformats-officedocument.wordprocessingml.document":
-            text = extract_text_from_docx(uploaded_file)
-        else:
-            st.error("Unsupported file type.")
-            return
-
-        if not text.strip():
-            st.error("Could not extract text from the file.")
-            return
-
-        detector = PIIDetector()
-        pii = detector.detect_all_pii(text)
-        cleaned_text, removal_count = detector.remove_pii(text, pii)
-
-        candidate_name = pii['names'][0] if pii.get('names') else "Candidate Name"
-
-# --- Supported Formats Area ---
-col1, col2 = st.columns([1, 2])
-with col2:
-    st.markdown("""
-        <div style='background-color: #f0f4f8; padding: 1em; border-radius: 8px; margin-bottom: 1em;'>
-            <b>Supported formats:</b>
-            <ul style='margin:0; padding-left:1.2em;'>
-                <li>PDF documents <span style='color:#e25555;'>&#128196;</span></li>
-                <li>DOCX documents <span style='color:#4a90e2;'>&#128196;</span></li>
-            </ul>
-        </div>
-    """, unsafe_allow_html=True)
-
-# --- Upload Area with Anchor ---
-st.markdown("<div id='upload-area'></div>", unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'docx'])
-
-if uploaded_file:
-    st.success(f"Uploaded: {uploaded_file.name}")
 
 # --- Advanced PII Detection Class ---
 class PIIDetector:
@@ -271,7 +365,7 @@ def generate_asahi_cv(cleaned_text, logo_img, candidate_name, age):
 # --- Main Application ---
 def main():
     st.set_page_config(
-        page_title="Asahi CV Formatter", 
+        page_title="Asahi CV Formatter",
         layout="centered",
         initial_sidebar_state="collapsed"
     )
@@ -280,9 +374,20 @@ def main():
     
     # Clean professional header
     st.markdown("""
-    <div class="professional-header">
-        <h1>Asahi CV Formatter</h1>
-        <p>Professional CV formatting with automatic privacy protection</p>
+    <div class="main-header">
+        <span class="emoji">📝</span>Asahi CV Formatter
+    </div>
+    """, unsafe_allow_html=True)
+    st.write("Professional CV formatting with automatic privacy protection")
+
+    # Supported formats section with improved design
+    st.markdown("""
+    <div class="supported-formats">
+        <h3>📄 Supported Formats</h3>
+        <ul class="format-list">
+            <li>PDF documents <span class="pdf-icon">📄</span></li>
+            <li>DOCX documents <span class="docx-icon">📄</span></li>
+        </ul>
     </div>
     """, unsafe_allow_html=True)
     
@@ -291,7 +396,7 @@ def main():
     # Single clean upload section
     st.markdown("""
     <div class="clean-card">
-        <h3 style="margin-bottom: 1.5rem; color: #374151;">Upload CV Document</h3>
+        <h3>Upload CV Document</h3>
     </div>
     """, unsafe_allow_html=True)
     
@@ -307,7 +412,7 @@ def main():
     # Input fields in clean card
     st.markdown("""
     <div class="clean-card">
-        <h3 style="margin-bottom: 1.5rem; color: #374151;">Candidate Information</h3>
+        <h3>Candidate Information</h3>
     </div>
     """, unsafe_allow_html=True)
     
@@ -385,7 +490,7 @@ def main():
                 final_doc.save(buffer)
                 buffer.seek(0)
                 
-                # Show completion message (no button styling)
+                # Show completion message
                 st.markdown(f"""
                 <div class="status-success">
                     <strong>CV Processing Complete!</strong><br/>
@@ -418,12 +523,13 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # Simple download text (styled as link, not button)
+                # Download with filename format from second code
                 st.markdown("<br/>", unsafe_allow_html=True)
+                file_name = f"Asahi_CV_{abbreviate_name_age(candidate_name, age)}.docx"
                 st.download_button(
-                    label="Download processed CV document",
+                    label="Download Formatted CV",
                     data=buffer,
-                    file_name=f"Asahi_CV_{candidate_name.replace(' ', '_')}.docx",
+                    file_name=file_name,
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
                 
@@ -452,6 +558,9 @@ def main():
             <strong>Ready to process:</strong> Please provide all required information above to continue.
         </div>
         """, unsafe_allow_html=True)
+
+    # Footer
+    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
