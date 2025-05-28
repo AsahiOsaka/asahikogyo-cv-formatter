@@ -1,3 +1,4 @@
+
 # Professional Asahi CV Formatter - Clean & Simple Design
 import streamlit as st
 from docx import Document
@@ -247,15 +248,27 @@ def main():
 
         candidate_name = pii['names'][0] if pii.get('names') else "Candidate Name"
 
-        # Load logo image
-        try:
-            logo_img = Image.open("asahi_logo.png")
-        except FileNotFoundError:
-            st.error("asahi_logo.png not found.  Place in the same directory.")
-            return
-        except Exception as e:
-            st.error(f"Error loading logo: {e}")
-            return
+         # Load logo
+            logo_path = "asahi_logo-04.jpg"
+            try:
+                logo_img = Image.open(logo_path)
+            except FileNotFoundError:
+                st.error("⚠️ Logo file 'asahi_logo-04.jpg' not found. Please ensure it's in the same directory.")
+                st.stop()
+            
+            # Extract text based on file type
+            with st.spinner("📖 Extracting text from uploaded file..."):
+                if uploaded_file.name.lower().endswith(".pdf"):
+                    raw_text = extract_text_from_pdf(uploaded_file)
+                elif uploaded_file.name.lower().endswith(".docx"):
+                    raw_text = extract_text_from_docx(uploaded_file)
+                else:
+                    st.error("❌ Unsupported file type. Please upload a PDF or DOCX file.")
+                    st.stop()
+            
+            if not raw_text.strip():
+                st.error("❌ No text could be extracted from the file. Please check the file format.")
+                st.stop()
 
         doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
 
