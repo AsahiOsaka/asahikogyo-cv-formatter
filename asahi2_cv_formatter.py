@@ -396,13 +396,18 @@ def main():
     apply_professional_css()
     
     # Clickable header that jumps to upload area
-    <div class="main-header">
-    <a href="#upload-section" style="color: white; text-decoration: none; display: block;">
-        <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+st.markdown("""
+<div style='text-align: center; margin-bottom: 2rem;'>
+    <a href="#upload-area" style='text-decoration: none; font-size: 2rem;'>
+        <span class="emoji">📝</span> <strong>Asahi CV Formatter</strong> <span style='font-size: 1.2rem;'>🔗</span>
     </a>
 </div>
+""", unsafe_allow_html=True)
 
-    """, unsafe_allow_html=True)
+# Somewhere later in the layout
+st.markdown('<div id="upload-area"></div>', unsafe_allow_html=True)
+uploaded_file = st.file_uploader("Upload your CV file", type=["pdf", "docx"])
+
     st.write("Professional CV formatting with automatic privacy protection")
 
     # Supported formats section with improved design
