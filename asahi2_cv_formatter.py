@@ -424,8 +424,9 @@ def main():
     # Clickable header with hover link symbol effect
     st.markdown("""
     <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
-        <span class="emoji">📝</span>Asahi CV Formatter<span class="link-symbol">🔗</span>
-    </div>
+    <span class="emoji">📝</span>Asahi CV Formatter<span class="link-symbol">🔗</span>
+</div>
+<div id="upload-section"></div>
     """, unsafe_allow_html=True)
     st.write("Professional CV formatting with automatic privacy protection")
 
