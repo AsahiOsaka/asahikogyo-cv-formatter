@@ -409,7 +409,7 @@ def main():
     # Age input only, no separate card
     age = st.number_input("Enter age", min_value=18, max_value=99, step=1)
     
-    # Processing section
+    # Processing section - Auto-process when file and age are provided
     if uploaded_file and age:
         # Load logo
         try:
@@ -443,95 +443,38 @@ def main():
         </div>
         """, unsafe_allow_html=True)
         
-        # Single process button
-        if st.button("Process CV", use_container_width=True):
-            with st.spinner("Processing CV..."):
-                # Detect PII
-                detected_pii = pii_detector.detect_all_pii(raw_text)
-                total_pii_items = sum(len(items) for items in detected_pii.values())
-                
-                # Show progress
-                progress_html = """
-                <div style="margin: 1.5rem 0;">
-                    <div class="progress-step"><span class="step-check">✓</span> File uploaded and text extracted</div>
-                    <div class="progress-step"><span class="step-check">✓</span> Personal information detected and removed</div>
-                    <div class="progress-step"><span class="step-check">✓</span> Professional formatting applied</div>
-                    <div class="progress-step"><span class="step-check">✓</span> Document ready for download</div>
-                </div>
-                """
-                st.markdown(progress_html, unsafe_allow_html=True)
-                
-                # Clean the text
-                cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
-                
-                # Generate document using extracted name from CV
-                detected_names = pii_detector.detect_names(raw_text)
-                candidate_name = detected_names[0] if detected_names else "Candidate"
-                
-                final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
-                buffer = BytesIO()
-                final_doc.save(buffer)
-                buffer.seek(0)
-                
-                # Show completion message
-                st.markdown(f"""
-                <div class="status-success">
-                    CV Processing Complete! Personal information removed: {removal_count} items. Final document ready with professional Asahi formatting.
-                </div>
-                """, unsafe_allow_html=True)
-                
-                # Simple metrics
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.markdown(f"""
-                    <div class="metric-item">
-                        <div class="metric-number">{removal_count}</div>
-                        <div class="metric-label">Items Removed</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col2:
-                    st.markdown(f"""
-                    <div class="metric-item">
-                        <div class="metric-number">{len(cleaned_text.split())}</div>
-                        <div class="metric-label">Final Words</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                with col3:
-                    st.markdown(f"""
-                    <div class="metric-item">
-                        <div class="metric-number">{len(detected_pii)}</div>
-                        <div class="metric-label">PII Categories</div>
-                    </div>
-                    """, unsafe_allow_html=True)
-                
-                # Download with filename format
-                st.markdown("<br/>", unsafe_allow_html=True)
-                file_name = f"Asahi_CV_{abbreviate_name_age(candidate_name, age)}.docx"
-                st.download_button(
-                    label="Download Formatted CV",
-                    data=buffer,
-                    file_name=file_name,
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                )
-                
-                # Optional: Show what was removed (collapsible) - without showing names
-                if total_pii_items > 0:
-                    with st.expander("View what was removed (optional)"):
-                        st.markdown("""
-                        <div class="detection-summary">
-                            <h4 style="margin-bottom: 1rem; color: #92400e;">Detected Personal Information:</h4>
-                        """, unsafe_allow_html=True)
-                        
-                        for pii_type, items in detected_pii.items():
-                            if items:
-                                pii_type_display = pii_type.replace('_', ' ').title()
-                                st.markdown(f"""
-                                <div class="detection-item">
-                                    <strong>{pii_type_display}:</strong> {len(items)} item(s) found
-                                </div>
-                                """, unsafe_allow_html=True)
-                        
-                        st.markdown("</div>", unsafe_allow_html=True)
+        # Auto-process without button
+        with st.spinner("Processing CV..."):
+            # Extract candidate name first for abbreviation
+            detected_names = pii_detector.detect_names(raw_text)
+            candidate_name = detected_names[0] if detected_names else "Candidate"
+            
+            # Detect and remove ALL PII including names
+            detected_pii = pii_detector.detect_all_pii(raw_text)
+            cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
+            
+            # Generate document with only abbreviation in header
+            final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
+            buffer = BytesIO()
+            final_doc.save(buffer)
+            buffer.seek(0)
+            
+            # Show simple completion message
+            st.markdown("""
+            <div class="status-success">
+                CV Processing Complete!
+            </div>
+            """, unsafe_allow_html=True)
+            
+            # Download with abbreviation filename
+            abbreviation = abbreviate_name_age(candidate_name, age).replace(f" {age}yrs", "")
+            file_name = f"Asahi_CV_{abbreviation}.docx"
+            st.download_button(
+                label="Download Formatted CV",
+                data=buffer,
+                file_name=file_name,
+                mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            )
     
     elif uploaded_file or age:
         st.markdown("""
