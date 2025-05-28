@@ -27,6 +27,11 @@ def apply_professional_css():
         font-weight: 700;
         letter-spacing: 1px;
         box-shadow: 0 2px 8px rgba(44,83,100,0.12);
+        cursor: pointer;
+    }
+    .main-header:hover {
+        background: linear-gradient(90deg, #1a2b32 0%, #3a6374 100%);
+        transition: all 0.3s ease;
     }
     .emoji {
         font-size: 2.2rem;
@@ -95,13 +100,11 @@ def apply_professional_css():
         background: #edf2f7;
     }
     .status-success {
-        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%);
-        color: white;
-        padding: 1rem 1.5rem;
-        border-radius: 10px;
+        color: #2d5016;
+        padding: 0.5rem 0;
         margin: 1rem 0;
         font-weight: 500;
-        box-shadow: 0 2px 8px rgba(72,187,120,0.2);
+        font-size: 0.95rem;
     }
     .status-info {
         background: linear-gradient(135deg, #4299e1 0%, #3182ce 100%);
@@ -215,7 +218,7 @@ class PIIDetector:
     
     def detect_all_pii(self, text):
         detected_pii = defaultdict(list)
-        detected_pii['names'] = self.detect_names(text)
+        # Don't include names in the returned PII
         
         for pii_type, pattern in self.patterns.items():
             matches = pattern.findall(text)
@@ -237,7 +240,9 @@ class PIIDetector:
         cleaned_text = text
         removal_count = 0
         
-        for name in detected_pii.get('names', []):
+        # Still detect and remove names internally, but don't show them in PII report
+        detected_names = self.detect_names(text)
+        for name in detected_names:
             if name and len(name.strip()) > 2:
                 pattern = re.compile(re.escape(name), re.IGNORECASE)
                 if pattern.search(cleaned_text):
@@ -245,8 +250,6 @@ class PIIDetector:
                     removal_count += 1
         
         for pii_type, items in detected_pii.items():
-            if pii_type == 'names':
-                continue
             for item in items:
                 if item and len(str(item).strip()) > 1:
                     pattern = re.compile(re.escape(str(item)), re.IGNORECASE)
@@ -372,9 +375,9 @@ def main():
     
     apply_professional_css()
     
-    # Clean professional header
+    # Clickable header that scrolls to upload area
     st.markdown("""
-    <div class="main-header">
+    <div class="main-header" onclick="document.querySelector('.upload-area').scrollIntoView({behavior: 'smooth'});">
         <span class="emoji">📝</span>Asahi CV Formatter
     </div>
     """, unsafe_allow_html=True)
@@ -393,13 +396,7 @@ def main():
     
     pii_detector = PIIDetector()
     
-    # Single clean upload section
-    st.markdown("""
-    <div class="clean-card">
-        <h3>Upload CV Document</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
+    # Upload section without separate card
     with st.container():
         st.markdown('<div class="upload-area">', unsafe_allow_html=True)
         uploaded_file = st.file_uploader(
@@ -409,28 +406,11 @@ def main():
         )
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Input fields in clean card
-    st.markdown("""
-    <div class="clean-card">
-        <h3>Candidate Information</h3>
-    </div>
-    """, unsafe_allow_html=True)
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        candidate_name = st.text_input("Full Name", placeholder="John Smith")
-    with col2:
-        age = st.number_input("Age", min_value=18, max_value=99, step=1)
-    
-    if candidate_name and age:
-        st.markdown(f"""
-        <div class="status-info">
-            <strong>Header Preview:</strong> {abbreviate_name_age(candidate_name, age)}
-        </div>
-        """, unsafe_allow_html=True)
+    # Age input only, no separate card
+    age = st.number_input("Enter age", min_value=18, max_value=99, step=1)
     
     # Processing section
-    if uploaded_file and candidate_name and age:
+    if uploaded_file and age:
         # Load logo
         try:
             logo_img = Image.open("asahi_logo-04.jpg")
@@ -456,10 +436,10 @@ def main():
             """, unsafe_allow_html=True)
             st.stop()
         
-        # Show file loaded successfully
+        # Show file loaded successfully in plain text
         st.markdown(f"""
         <div class="status-success">
-            <strong>File loaded successfully:</strong> {uploaded_file.name} ({len(raw_text.split())} words)
+            File loaded successfully: {uploaded_file.name} ({len(raw_text.split())} words)
         </div>
         """, unsafe_allow_html=True)
         
@@ -484,7 +464,10 @@ def main():
                 # Clean the text
                 cleaned_text, removal_count = pii_detector.remove_pii(raw_text, detected_pii)
                 
-                # Generate document
+                # Generate document using extracted name from CV
+                detected_names = pii_detector.detect_names(raw_text)
+                candidate_name = detected_names[0] if detected_names else "Candidate"
+                
                 final_doc = generate_asahi_cv(cleaned_text, logo_img, candidate_name, age)
                 buffer = BytesIO()
                 final_doc.save(buffer)
@@ -493,9 +476,7 @@ def main():
                 # Show completion message
                 st.markdown(f"""
                 <div class="status-success">
-                    <strong>CV Processing Complete!</strong><br/>
-                    Personal information removed: {removal_count} items<br/>
-                    Final document ready with professional Asahi formatting.
+                    CV Processing Complete! Personal information removed: {removal_count} items. Final document ready with professional Asahi formatting.
                 </div>
                 """, unsafe_allow_html=True)
                 
@@ -523,7 +504,7 @@ def main():
                     </div>
                     """, unsafe_allow_html=True)
                 
-                # Download with filename format from second code
+                # Download with filename format
                 st.markdown("<br/>", unsafe_allow_html=True)
                 file_name = f"Asahi_CV_{abbreviate_name_age(candidate_name, age)}.docx"
                 st.download_button(
@@ -533,7 +514,7 @@ def main():
                     mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 )
                 
-                # Optional: Show what was removed (collapsible)
+                # Optional: Show what was removed (collapsible) - without showing names
                 if total_pii_items > 0:
                     with st.expander("View what was removed (optional)"):
                         st.markdown("""
@@ -552,7 +533,7 @@ def main():
                         
                         st.markdown("</div>", unsafe_allow_html=True)
     
-    elif uploaded_file or candidate_name or age:
+    elif uploaded_file or age:
         st.markdown("""
         <div class="status-info">
             <strong>Ready to process:</strong> Please provide all required information above to continue.
