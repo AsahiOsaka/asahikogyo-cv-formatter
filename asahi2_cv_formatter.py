@@ -28,10 +28,34 @@ def apply_professional_css():
         letter-spacing: 1px;
         box-shadow: 0 2px 8px rgba(44,83,100,0.12);
         cursor: pointer;
+        position: relative;
+        transition: all 0.3s ease;
     }
     .main-header:hover {
         background: linear-gradient(90deg, #1a2b32 0%, #3a6374 100%);
-        transition: all 0.3s ease;
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(44,83,100,0.2);
+    }
+    .main-header .link-symbol {
+        opacity: 0;
+        transition: opacity 0.3s ease;
+        margin-left: 0.5rem;
+        font-size: 1.2rem;
+        vertical-align: middle;
+    }
+    .main-header:hover .link-symbol {
+        opacity: 1;
+    }
+    .main-header a {
+        color: white;
+        text-decoration: none;
+        display: block;
+        width: 100%;
+        height: 100%;
+    }
+    .main-header a:hover {
+        color: white;
+        text-decoration: none;
     }
     .emoji {
         font-size: 2.2rem;
@@ -174,6 +198,8 @@ class PIIDetector:
             'date_of_birth': re.compile(r'\b(?:DOB|Date of Birth|Born):?\s*(?:\d{1,2}[/-]\d{1,2}[/-]\d{2,4}|\d{1,2}\s+(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*\s+\d{2,4})', re.IGNORECASE),
             'ssn': re.compile(r'\b\d{3}-\d{2}-\d{4}\b'),
             'linkedin': re.compile(r'linkedin\.com/in/[\w-]+', re.IGNORECASE),
+	self.patterns['name'] = re.compile(r'^[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+$'),
+
         }
         
         self.personal_keywords = [
@@ -183,7 +209,7 @@ class PIIDetector:
             'marital status', 'married', 'single', 'divorced',
             'nationality', 'citizen', 'passport', 'visa status',
             'height:', 'weight:', 'blood type', 'emergency contact',
-            'email address', 'e-mail', 'gmail', 'yahoo', '@'
+            'email address', 'e-mail', 'gmail', 'yahoo','name','full name', '@'
         ]
         
         # Patterns to identify lines containing personal information that should be completely removed
@@ -395,12 +421,10 @@ def main():
     
     apply_professional_css()
     
-    # Clickable header that jumps to upload area
+    # Clickable header with hover link symbol effect
     st.markdown("""
-    <div class="main-header">
-        <a href="#upload-section" style="color: white; text-decoration: none; display: block;">
-            <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
-        </a>
+    <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
+        <span class="emoji">📝</span>Asahi CV Formatter<span class="link-symbol">🔗</span>
     </div>
     """, unsafe_allow_html=True)
     st.write("Professional CV formatting with automatic privacy protection")
@@ -419,6 +443,7 @@ def main():
     pii_detector = PIIDetector()
     
     # Upload section - Clean version without extra spacing
+    st.markdown('<div id="upload-section"></div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
         "📄 Choose CV file (PDF or DOCX)", 
         type=["docx", "pdf"],
