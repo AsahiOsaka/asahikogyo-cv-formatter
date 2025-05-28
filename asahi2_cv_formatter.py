@@ -407,10 +407,12 @@ def main():
     
     apply_professional_css()
     
-    # Clickable header that scrolls to upload area
+    # Clickable header that jumps to upload area
     st.markdown("""
-    <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
-        <span class="emoji">📝</span>Asahi CV Formatter
+    <div class="main-header">
+        <a href="#upload-section" style="color: white; text-decoration: none; display: block;">
+            <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+        </a>
     </div>
     """, unsafe_allow_html=True)
     st.write("Professional CV formatting with automatic privacy protection")
@@ -438,11 +440,16 @@ def main():
         )
         st.markdown('</div>', unsafe_allow_html=True)
     
-    # Age input only, no separate card
-    age = st.number_input("Enter age", min_value=18, max_value=99, step=1)
+    # Candidate information inputs
+    st.markdown("### 👤 Candidate Information")
+    col1, col2 = st.columns(2)
+    with col1:
+        candidate_name = st.text_input("👤 Candidate Full Name", placeholder="e.g., John Doe Smith")
+    with col2:
+        age = st.number_input("🎂 Candidate Age", min_value=18, max_value=99, step=1)
     
-    # Processing section - Auto-process when file and age are provided
-    if uploaded_file and age:
+    # Processing section - Auto-process when file, name and age are provided
+    if uploaded_file and candidate_name.strip() and age:
         # Load logo
         try:
             logo_img = Image.open("asahi_logo-04.jpg")
@@ -477,9 +484,7 @@ def main():
         
         # Auto-process without button
         with st.spinner("Processing CV..."):
-            # Extract candidate name first for abbreviation
-            detected_names = pii_detector.detect_names(raw_text)
-            candidate_name = detected_names[0] if detected_names else "Candidate"
+            # Use the manually entered candidate name
             
             # Detect and remove ALL PII including names
             detected_pii = pii_detector.detect_all_pii(raw_text)
@@ -508,7 +513,7 @@ def main():
                 mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document"
             )
     
-    elif uploaded_file or age:
+    elif uploaded_file or candidate_name.strip() or age:
         st.markdown("""
         <div class="status-info">
             <strong>Ready to process:</strong> Please provide all required information above to continue.
