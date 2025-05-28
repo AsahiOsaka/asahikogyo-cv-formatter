@@ -430,15 +430,12 @@ def main():
     
     pii_detector = PIIDetector()
     
-    # Upload section with ID for scrolling
-    with st.container():
-        st.markdown('<div class="upload-area" id="upload-section">', unsafe_allow_html=True)
-        uploaded_file = st.file_uploader(
-            "Choose CV file (PDF or DOCX)", 
-            type=["docx", "pdf"],
-            help="Upload the candidate's resume in PDF or Word format"
-        )
-        st.markdown('</div>', unsafe_allow_html=True)
+    # Upload section
+uploaded_file = st.file_uploader(
+    "📄 Choose CV file (PDF or DOCX)", 
+    type=["docx", "pdf"],
+    help="Upload the candidate's resume in PDF or Word format"
+)
     
     # Candidate information inputs
     st.markdown("### 👤 Candidate Information")
