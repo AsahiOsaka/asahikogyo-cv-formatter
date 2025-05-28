@@ -190,11 +190,22 @@ class PIIDetector:
         
         self.personal_keywords = [
             'home address', 'residential address', 'current address', 'permanent address',
-            'contact number', 'mobile number', 'cell phone', 'telephone',
+            'contact number', 'mobile number', 'cell phone', 'telephone', 'tel. no', 'phone',
             'date of birth', 'dob', 'born on', 'age:', 'years old',
             'marital status', 'married', 'single', 'divorced',
             'nationality', 'citizen', 'passport', 'visa status',
-            'height:', 'weight:', 'blood type', 'emergency contact'
+            'height:', 'weight:', 'blood type', 'emergency contact',
+            'email address', 'e-mail', 'gmail', 'yahoo', '@'
+        ]
+        
+        # Patterns to identify lines containing personal information that should be completely removed
+        self.pii_line_patterns = [
+            re.compile(r'.*(?:tel\.?\s*no\.?|phone|mobile|contact).*?[\+\(]?\d{1,4}[\s\-\(\)]*\d{3,4}[\s\-]*\d{3,4}.*', re.IGNORECASE),
+            re.compile(r'.*email.*?[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}.*', re.IGNORECASE),
+            re.compile(r'.*(?:address|location).*?\d+.*?(?:street|st|avenue|ave|road|rd|drive|dr|lane|ln|boulevard|blvd).*', re.IGNORECASE),
+            re.compile(r'.*(?:height|weight|born|dob|date of birth).*', re.IGNORECASE),
+            re.compile(r'.*(?:nationality|citizenship|passport|visa).*', re.IGNORECASE),
+            re.compile(r'.*(?:marital|married|single|divorced).*', re.IGNORECASE),
         ]
     
     def detect_names(self, text):
@@ -249,31 +260,52 @@ class PIIDetector:
                     cleaned_text = pattern.sub('', cleaned_text)
                     removal_count += 1
         
-        for pii_type, items in detected_pii.items():
-            for item in items:
-                if item and len(str(item).strip()) > 1:
-                    pattern = re.compile(re.escape(str(item)), re.IGNORECASE)
-                    if pattern.search(cleaned_text):
-                        cleaned_text = pattern.sub('[REDACTED]', cleaned_text)
-                        removal_count += 1
-        
+        # Process line by line to completely remove PII-containing lines
         lines = cleaned_text.split('\n')
         filtered_lines = []
+        
         for line in lines:
-            line_lower = line.lower()
-            should_remove = False
+            line_contains_pii = False
+            original_line = line.strip()
             
-            for keyword in self.personal_keywords:
-                if keyword in line_lower and not any(work_keyword in line_lower for work_keyword in ['experience', 'work', 'employment', 'company', 'project', 'skill']):
-                    should_remove = True
+            # Check if line matches any PII line patterns (complete removal)
+            for pii_pattern in self.pii_line_patterns:
+                if pii_pattern.match(line):
+                    line_contains_pii = True
                     removal_count += 1
                     break
             
-            if not should_remove and line.strip():
-                filtered_lines.append(line)
+            # Check for individual PII items in the line
+            if not line_contains_pii:
+                for pii_type, items in detected_pii.items():
+                    for item in items:
+                        if item and len(str(item).strip()) > 1:
+                            if str(item).lower() in line.lower():
+                                line_contains_pii = True
+                                removal_count += 1
+                                break
+                    if line_contains_pii:
+                        break
+            
+            # Check for personal keywords that indicate the entire line should be removed
+            if not line_contains_pii:
+                line_lower = line.lower()
+                for keyword in self.personal_keywords:
+                    if keyword in line_lower:
+                        # Additional check to avoid removing work-related lines
+                        if not any(work_keyword in line_lower for work_keyword in ['experience', 'work', 'employment', 'company', 'project', 'skill', 'education', 'university', 'college']):
+                            line_contains_pii = True
+                            removal_count += 1
+                            break
+            
+            # Only keep lines that don't contain PII
+            if not line_contains_pii and original_line:
+                filtered_lines.append(original_line)
         
         cleaned_text = '\n'.join(filtered_lines)
-        cleaned_text = re.sub(r'\n\s*\n\s*\n', '\n\n', cleaned_text)
+        
+        # Clean up extra whitespace and empty lines
+        cleaned_text = re.sub(r'\n\s*\n\s*\n+', '\n\n', cleaned_text)
         cleaned_text = cleaned_text.strip()
         
         return cleaned_text, removal_count
@@ -377,7 +409,7 @@ def main():
     
     # Clickable header that scrolls to upload area
     st.markdown("""
-    <div class="main-header" onclick="document.querySelector('.upload-area').scrollIntoView({behavior: 'smooth'});">
+    <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
         <span class="emoji">📝</span>Asahi CV Formatter
     </div>
     """, unsafe_allow_html=True)
@@ -396,9 +428,9 @@ def main():
     
     pii_detector = PIIDetector()
     
-    # Upload section without separate card
+    # Upload section with ID for scrolling
     with st.container():
-        st.markdown('<div class="upload-area">', unsafe_allow_html=True)
+        st.markdown('<div class="upload-area" id="upload-section">', unsafe_allow_html=True)
         uploaded_file = st.file_uploader(
             "Choose CV file (PDF or DOCX)", 
             type=["docx", "pdf"],
