@@ -87,18 +87,6 @@ def apply_professional_css():
         border-bottom: 2px solid #f1f5f9;
         padding-bottom: 0.5rem;
     }
-    .upload-area {
-        border: 2px dashed #cbd5e0;
-        border-radius: 12px;
-        padding: 2rem;
-        text-align: center;
-        background: #f7fafc;
-        transition: all 0.3s ease;
-    }
-    .upload-area:hover {
-        border-color: #2c5364;
-        background: #edf2f7;
-    }
     .status-success {
         color: #2d5016;
         padding: 0.5rem 0;
@@ -430,12 +418,12 @@ def main():
     
     pii_detector = PIIDetector()
     
-    # Upload section
-uploaded_file = st.file_uploader(
-    "📄 Choose CV file (PDF or DOCX)", 
-    type=["docx", "pdf"],
-    help="Upload the candidate's resume in PDF or Word format"
-)
+    # Upload section - Clean version without extra spacing
+    uploaded_file = st.file_uploader(
+        "📄 Choose CV file (PDF or DOCX)", 
+        type=["docx", "pdf"],
+        help="Upload the candidate's resume in PDF or Word format"
+    )
     
     # Candidate information inputs
     st.markdown("### 👤 Candidate Information")
