@@ -531,7 +531,7 @@ def main():
         """, unsafe_allow_html=True)
 
     # Footer
-    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer">©Asahi Kogyo Co., Ltd. Osaka Office</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
