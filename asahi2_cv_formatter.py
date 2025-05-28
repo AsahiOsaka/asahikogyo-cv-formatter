@@ -1,4 +1,4 @@
-# Professional Asahi CV Formatter - Clean & Simple Design
+# Professional Asahi CV Formatter - Clean & Simple Design 
 import streamlit as st
 from docx import Document
 from docx.shared import Inches, Pt, RGBColor
@@ -157,6 +157,10 @@ def apply_professional_css():
         color: #718096;
         font-size: 0.9rem;
         text-align: center;
+    }
+    /* Smooth scrolling for the entire page */
+    html {
+        scroll-behavior: smooth;
     }
     </style>
     """, unsafe_allow_html=True)
@@ -395,19 +399,13 @@ def main():
     
     apply_professional_css()
     
-    # Clickable header that jumps to upload area
-st.markdown("""
-<div style='text-align: center; margin-bottom: 2rem;'>
-    <a href="#upload-area" style='text-decoration: none; font-size: 2rem;'>
-        <span class="emoji">📝</span> <strong>Asahi CV Formatter</strong> <span style='font-size: 1.2rem;'>🔗</span>
-    </a>
-</div>
-""", unsafe_allow_html=True)
-
-# Somewhere later in the layout
-st.markdown('<div id="upload-area"></div>', unsafe_allow_html=True)
-uploaded_file = st.file_uploader("Upload your CV file", type=["pdf", "docx"])
-
+    # Clickable header that jumps to upload area - FIXED VERSION
+    st.markdown("""
+    <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
+        <span class="emoji">📝</span>Asahi CV Formatter <span style="font-size: 1.2rem;">🔗</span>
+    </div>
+    """, unsafe_allow_html=True)
+    
     st.write("Professional CV formatting with automatic privacy protection")
 
     # Supported formats section with improved design
@@ -423,7 +421,8 @@ uploaded_file = st.file_uploader("Upload your CV file", type=["pdf", "docx"])
     
     pii_detector = PIIDetector()
     
-    # Upload section - Clean version without extra spacing
+    # Upload section with anchor - Clean version without extra spacing
+    st.markdown('<div id="upload-section"></div>', unsafe_allow_html=True)
     uploaded_file = st.file_uploader(
         "📄 Choose CV file (PDF or DOCX)", 
         type=["docx", "pdf"],
@@ -511,7 +510,7 @@ uploaded_file = st.file_uploader("Upload your CV file", type=["pdf", "docx"])
         """, unsafe_allow_html=True)
 
     # Footer
-    st.markdown('<div class="footer">Made with ❤️ for professional CV formatting</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer">©Asahi Kogyo Co., Ltd. Osaka Office</div>', unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
