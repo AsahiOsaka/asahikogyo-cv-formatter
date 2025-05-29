@@ -225,9 +225,18 @@ class PIIDetector:
     def detect_names(self, text):
         detected_names = set()
         name_patterns = [
+            # Regular capitalized names (John Doe)
             re.compile(r'^([A-Z][a-z]+(?:\s+[A-Z][a-z]*)*)\s*$', re.MULTILINE),
+            # Names with labels
             re.compile(r'(?:Name|Full Name|Candidate):?\s*([A-Z][a-z]+(?:\s+[A-Z][a-z]*)+)', re.IGNORECASE),
+            # Names at start of line
             re.compile(r'^([A-Z][a-z]+\s+[A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)', re.MULTILINE),
+            # ALL CAPS NAMES (NEW PATTERN)
+            re.compile(r'^([A-Z]{2,}(?:\s+[A-Z]{2,})+)\s*$', re.MULTILINE),
+            # Mixed case ALL CAPS names
+            re.compile(r'(?:Name|Full Name|Candidate):?\s*([A-Z]{2,}(?:\s+[A-Z]{2,})+)', re.IGNORECASE),
+            # ALL CAPS at start of line
+            re.compile(r'^([A-Z]{2,}\s+[A-Z]{2,}(?:\s+[A-Z]{2,})*)', re.MULTILINE),
         ]
         
         for pattern in name_patterns:
@@ -235,8 +244,14 @@ class PIIDetector:
             for match in matches:
                 if isinstance(match, tuple):
                     match = match[0] if match[0] else match[1]
-                if not any(word.lower() in ['university', 'college', 'company', 'corporation', 'inc', 'ltd', 'experience', 'education', 'skills'] for word in match.split()):
-                    if len(match.split()) >= 2:
+                if not any(word.lower() in ['university', 'college', 'company', 'corporation', 'inc', 'ltd', 'experience', 'education', 'skills', 'objective', 'summary', 'profile', 'references', 'qualifications'] for word in match.split()):
+                    # For ALL CAPS, ensure it's at least 2 words and each word is at least 2 characters
+                    if match.isupper():
+                        words = match.split()
+                        if len(words) >= 2 and all(len(word) >= 2 for word in words):
+                            detected_names.add(match.strip())
+                    # For regular names, ensure at least 2 words
+                    elif len(match.split()) >= 2:
                         detected_names.add(match.strip())
         
         return list(detected_names)
@@ -269,7 +284,8 @@ class PIIDetector:
         detected_names = self.detect_names(text)
         for name in detected_names:
             if name and len(name.strip()) > 2:
-                pattern = re.compile(re.escape(name), re.IGNORECASE)
+                # Use word boundary matching for better accuracy
+                pattern = re.compile(r'\b' + re.escape(name) + r'\b', re.IGNORECASE)
                 if pattern.search(cleaned_text):
                     cleaned_text = pattern.sub('', cleaned_text)
                     removal_count += 1
@@ -421,12 +437,11 @@ def main():
     
     apply_professional_css()
     
-    # Clickable header with hover link symbol effect
+    # Clickable header with hover link symbol effect - FIXED
     st.markdown("""
     <div class="main-header" onclick="document.getElementById('upload-section').scrollIntoView({behavior: 'smooth'});">
-    <span class="emoji">📝</span>Asahi CV Formatter<span class="link-symbol">🔗</span>
-</div>
-<div id="upload-section"></div>
+        <span class="emoji">📝</span>Asahi CV Formatter<span class="link-symbol">🔗</span>
+    </div>
     """, unsafe_allow_html=True)
     st.write("Professional CV formatting with automatic privacy protection")
 
